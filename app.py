@@ -1,16 +1,71 @@
 import streamlit as st
-import markdown
-import base64
 import re
+import base64
 from pathlib import Path
+
+# Try to import markdown, but have a fallback method
+try:
+    import markdown
+    
+    def convert_md_to_html(md_content):
+        """Convert markdown to HTML using the markdown package"""
+        return markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
+        
+except ImportError:
+    # Fallback simple markdown to HTML converter
+    def convert_md_to_html(md_content):
+        """Simple markdown to HTML converter as fallback"""
+        html_content = md_content
+        
+        # Convert headers
+        html_content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
+        html_content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
+        html_content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
+        
+        # Convert paragraphs (lines followed by blank lines)
+        html_content = re.sub(r'([^\n]+)\n\n', r'<p>\1</p>\n\n', html_content)
+        
+        # Convert bold
+        html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
+        
+        # Convert italic
+        html_content = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html_content)
+        
+        # Convert unordered lists
+        list_items = []
+        in_list = False
+        
+        new_content = []
+        for line in html_content.split('\n'):
+            match = re.match(r'- (.*?)$', line)
+            if match:
+                if not in_list:
+                    new_content.append('<ul>')
+                    in_list = True
+                new_content.append(f'<li>{match.group(1)}</li>')
+            else:
+                if in_list:
+                    new_content.append('</ul>')
+                    in_list = False
+                new_content.append(line)
+        
+        if in_list:
+            new_content.append('</ul>')
+            
+        html_content = '\n'.join(new_content)
+        
+        # Convert code blocks
+        html_content = re.sub(r'```(.*?)```', r'<pre><code>\1</code></pre>', html_content, flags=re.DOTALL)
+        
+        return html_content
 
 def md_to_html_presentation(md_content, theme="white", transition="slide", max_chars_per_slide=1500, max_paragraphs_per_slide=6):
     """
     Convert markdown content to HTML presentation format using reveal.js
     Split long content into vertical slides
     """
-    # Convert markdown to HTML with extensions for tables, fenced code, etc.
-    html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
+    # Convert markdown to HTML
+    html_content = convert_md_to_html(md_content)
     
     # Split the HTML content by heading tags to create slides
     # First, add markers to the headings to facilitate splitting
